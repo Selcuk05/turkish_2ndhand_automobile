@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import glob
 import os
+import pandas as pd
 
 
 def unpad_image(image_path):
@@ -50,5 +51,48 @@ def process_images():
             print(f"Error processing {image_path}: {str(e)}")
 
 
+def replace_wrong_series(df):
+    df = df.copy()
+
+    mask = df["model"].str.contains("Serisi", na=False)
+
+    df.loc[mask, "model"] = df.loc[mask, "model"].str.replace("Serisi ", "")
+    df.loc[mask, "seri"] = df.loc[mask, "seri"] + " Serisi"
+
+    return df
+
+
+# This is to fix the difference between the two scraper scripts (Mercedes - Benz / Mercedes-Benz)
+def rename_wrong_brands(df):
+    df = df.copy()
+
+    mask = df["marka"].str.contains("Mercedes", na=False)
+
+    df.loc[mask, "marka"] = "Mercedes-Benz"
+
+    return df
+
+
+def remove_duplicates(df):
+    df = df.copy()
+
+    columns_to_check = [col for col in df.columns if col != "image_path"]
+    df = df.drop_duplicates(subset=columns_to_check)
+
+    return df
+
+
+def process_csv(csv_path="data/turkish_2ndhand_automobile.csv"):
+    df = pd.read_csv(csv_path)
+    df = replace_wrong_series(df)
+    df = rename_wrong_brands(df)
+    df = remove_duplicates(df)
+    df.to_csv(csv_path, index=False)
+
+    return df
+
+
 if __name__ == "__main__":
     process_images()
+    df = process_csv()
+    print("New data shape:", df.shape)

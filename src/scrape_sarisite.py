@@ -318,12 +318,6 @@ class ScraperWorker:
 
 def parallel_scraper(num_workers=3, max_pages=None):
     logger.info(f"Starting parallel scraper with {num_workers} workers")
-    date = datetime.now().strftime("%d%m%Y")
-    csv_filename = f"data/turkish_2ndhand_automobile.csv"
-
-    if os.path.exists(csv_filename):
-        os.remove(csv_filename)
-        logger.info(f"Removed existing file: {csv_filename}")
 
     work_queue = queue.Queue()
     result_queue = queue.Queue()
