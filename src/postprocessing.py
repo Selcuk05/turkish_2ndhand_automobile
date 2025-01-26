@@ -84,10 +84,12 @@ def remove_duplicates(df):
 
 def process_csv(csv_path="data/turkish_2ndhand_automobile.csv"):
     df = pd.read_csv(csv_path)
+
     df = replace_wrong_series(df)
     df = rename_wrong_brands(df)
     df = remove_duplicates(df)
-    df.to_csv(csv_path, index=False)
+
+    df.to_csv("data/turkish_2ndhand_automobile_processed.csv", index=False)
 
     return df
 
