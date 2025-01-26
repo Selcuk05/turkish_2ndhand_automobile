@@ -1,6 +1,5 @@
 import torch
 import cv2
-from src.classifier.model import HierarchicalCNN
 from src.classifier.data import get_transforms
 
 
