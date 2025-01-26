@@ -82,12 +82,23 @@ def remove_duplicates(df):
     return df
 
 
+def processed_image_paths(df):
+    df = df.copy()
+
+    df["image_path"] = df["image_path"].apply(
+        lambda x: os.path.join("data/processed_images", os.path.basename(x))
+    )
+
+    return df
+
+
 def process_csv(csv_path="data/turkish_2ndhand_automobile.csv"):
     df = pd.read_csv(csv_path)
 
     df = replace_wrong_series(df)
     df = rename_wrong_brands(df)
     df = remove_duplicates(df)
+    df = processed_image_paths(df)
 
     df.to_csv("data/turkish_2ndhand_automobile_processed.csv", index=False)
 
