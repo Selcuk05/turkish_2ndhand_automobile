@@ -71,6 +71,10 @@ rate_limiter = RateLimiter()
 base_url = "https://sahibinden.com/otomobil"
 paging_offset = 50
 paging_size = 50
+MAX_OFFSET = 950  # Maximum offset we want to reach
+MAX_PAGES = (
+    MAX_OFFSET // paging_size
+) + 1  # Number of pages needed to reach offset 950
 
 
 def setup_driver():
@@ -365,14 +369,14 @@ def parallel_scraper(num_workers=3, max_pages=None):
         pages_processed = 0
         failed_pages = 0
 
-        while active and (max_pages is None or pages_processed < max_pages):
-            while work_queue.qsize() < num_workers * 2 and (
-                max_pages is None or pages_processed < max_pages
-            ):
-                work_queue.put(current_offset)
-                current_offset += paging_size
-                pages_processed += 1
+        # First, queue all pages up to MAX_OFFSET
+        while current_offset <= MAX_OFFSET:
+            work_queue.put(current_offset)
+            current_offset += paging_size
+            pages_processed += 1
+            logger.info(f"Queued offset {current_offset}")
 
+        while active:
             try:
                 offset, data, images = result_queue.get_nowait()
                 if not data:
@@ -388,7 +392,17 @@ def parallel_scraper(num_workers=3, max_pages=None):
                     filename = save_data(data, images, offset)
                     logger.info(f"Saved data from offset {offset} to {filename}")
                 result_queue.task_done()
+
+                # Check if we've processed all pages
+                if work_queue.empty() and result_queue.empty():
+                    logger.info(f"All offsets up to {MAX_OFFSET} have been processed")
+                    break
             except queue.Empty:
+                if work_queue.empty():
+                    # Give a short grace period for results to come in
+                    time.sleep(1)
+                    if result_queue.empty():
+                        break
                 time.sleep(0.1)
 
         logger.info(f"Scraping completed. Processed {pages_processed} pages")
@@ -404,9 +418,8 @@ def parallel_scraper(num_workers=3, max_pages=None):
 def main():
     try:
         num_workers = 2  # Reduced number of workers to avoid rate limiting
-        max_pages = None
         logger.info("Starting scraper application")
-        parallel_scraper(num_workers=num_workers, max_pages=max_pages)
+        parallel_scraper(num_workers=num_workers, max_pages=MAX_PAGES)
     except Exception as e:
         logger.error(f"Application error: {str(e)}")
     finally:
