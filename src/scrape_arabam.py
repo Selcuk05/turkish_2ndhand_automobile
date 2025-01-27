@@ -206,7 +206,6 @@ def save_data(data, images, page):
         "yil",
         "km",
         "fiyat",
-        "tarih",
         "il_ilce",
         "image_path",
     ]
@@ -413,7 +412,6 @@ class ScraperWorker:
                 km = self._clean_text(cols[4].text)  # Kilometre
                 renk = self._clean_text(cols[5].text)  # Renk
                 price = self._process_price(cols[6].text)  # Fiyat
-                date = self._clean_text(cols[7].text)  # Tarih
                 location = self._clean_text(cols[8].text)  # İl/İlçe
 
                 # Parse title using the new method
@@ -430,7 +428,6 @@ class ScraperWorker:
                     yil,
                     km,
                     price,
-                    date,
                     location,
                     None,  # image_path placeholder, will be filled in save_data
                 ]

@@ -182,7 +182,6 @@ def scrape_page(driver, offset):
 
 def save_data(data, images, offset):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    date = datetime.now().strftime("%d%m%Y")
     csv_filename = f"data/turkish_2ndhand_automobile.csv"
 
     if not os.path.exists("data"):
@@ -198,8 +197,8 @@ def save_data(data, images, offset):
         "yil",
         "km",
         "fiyat",
-        "tarih",
         "il_ilce",
+        "image_path",
     ]
     df = pd.DataFrame(data, columns=columns)
 
