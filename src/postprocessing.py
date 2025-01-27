@@ -3,6 +3,7 @@ import numpy as np
 import glob
 import os
 import pandas as pd
+from tqdm import tqdm
 
 
 def is_placeholder_image(img):
@@ -66,17 +67,15 @@ def process_images():
     os.makedirs("data/processed_images", exist_ok=True)
     failed_images = set()
 
-    for image_path in glob.glob("data/images/*.jpg"):
+    image_paths = glob.glob("data/images/*.jpg")
+    for image_path in tqdm(image_paths, desc="Processing images"):
         try:
             unpadded_image = unpad_image(image_path)
             resized_image = resize_image(unpadded_image)
 
             output_path = f"data/processed_images/{os.path.basename(image_path)}"
             cv2.imwrite(output_path, resized_image)
-            print(f"Processed {image_path} -> {output_path}")
-            print(f"New dimensions: {resized_image.shape[:2]}")
-        except Exception as e:
-            print(f"Error processing {image_path}: {str(e)}")
+        except Exception:
             failed_images.add(os.path.basename(image_path))
 
             output_path = f"data/processed_images/{os.path.basename(image_path)}"
