@@ -7,11 +7,9 @@ from tqdm import tqdm
 
 
 def is_placeholder_image(img):
-    """Check if an image is a placeholder (mostly white) image."""
     if img is None:
         return True
 
-    # Convert to grayscale if it's a color image
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
@@ -99,10 +97,12 @@ def replace_wrong_series(df):
 # This is to fix the difference between the two scraper scripts (Mercedes - Benz / Mercedes-Benz)
 def rename_wrong_brands(df):
     df = df.copy()
-
     mask = df["marka"].str.contains("Mercedes", na=False)
-
     df.loc[mask, "marka"] = "Mercedes-Benz"
+
+    renamed_count = len(df[mask])
+    if renamed_count > 0:
+        print(f"Renamed {renamed_count} entries for wrong brand name")
 
     return df
 
@@ -113,12 +113,15 @@ def remove_duplicates(df):
     columns_to_check = [col for col in df.columns if col != "image_path"]
     df = df.drop_duplicates(subset=columns_to_check)
 
+    removed_count = len(df) - len(df.drop_duplicates(subset=columns_to_check))
+    if removed_count > 0:
+        print(f"Removed {removed_count} duplicates")
+
     return df
 
 
 def process_image_paths(df):
     df = df.copy()
-
     df["image_path"] = df["image_path"].apply(
         lambda x: f"data/processed_images/{os.path.basename(x)}"
     )
@@ -126,21 +129,44 @@ def process_image_paths(df):
     return df
 
 
-def process_csv(csv_path="data/turkish_2ndhand_automobile.csv", failed_images=None):
-    df = pd.read_csv(csv_path)
-    initial_len = len(df)
+def eliminate_low_samples(df, min_sample=5, keys=["marka"]):
+    df = df.copy()
+    eliminated_count = 0
 
+    for key in keys:
+        value_counts = df[key].value_counts()
+        mask = df[key].map(value_counts) >= min_sample
+        df = df[mask]
+        eliminated_count += len(mask) - mask.sum()
+
+    if eliminated_count > 0:
+        print(f"Eliminated {eliminated_count} entries for low sample count")
+
+    return df
+
+
+def eliminate_placeholder_links(df, failed_images=None):
+    initial_len = len(df)
     if failed_images:
         df = df[
             ~df["image_path"].apply(lambda x: os.path.basename(x)).isin(failed_images)
         ]
         removed_count = initial_len - len(df)
+
         if removed_count > 0:
             print(f"Removed {removed_count} entries for failed/placeholder images")
 
+    return df
+
+
+def process_csv(csv_path="data/turkish_2ndhand_automobile.csv", failed_images=None):
+    df = pd.read_csv(csv_path)
+
+    df = remove_duplicates(df)
+    df = eliminate_low_samples(df)
+    df = eliminate_placeholder_links(df, failed_images)
     df = replace_wrong_series(df)
     df = rename_wrong_brands(df)
-    df = remove_duplicates(df)
     df = process_image_paths(df)
 
     df.to_csv("data/turkish_2ndhand_automobile_processed.csv", index=False)
