@@ -200,6 +200,3 @@ chromedriver.exe
 
 # Log folder
 logs/
-
-# mlruns
-mlruns/

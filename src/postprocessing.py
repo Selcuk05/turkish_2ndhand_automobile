@@ -121,7 +121,7 @@ def processed_image_paths(df):
     df = df.copy()
 
     df["image_path"] = df["image_path"].apply(
-        lambda x: os.path.join("data/processed_images", os.path.basename(x))
+        lambda x: f"data/processed_images/{os.path.basename(x)}"
     )
 
     return df
