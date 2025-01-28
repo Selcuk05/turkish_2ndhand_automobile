@@ -43,6 +43,54 @@ def unpad_image(image_path):
     return rect
 
 
+def remove_otokoc_stamp(image):
+    # Define the region to process (only the top banner part)
+    y_limit = 80  # Reduced from 135 to focus only on the banner
+    top_part = image[0:y_limit, :].copy()
+
+    # Convert to HSV for better color segmentation
+    hsv_top = cv2.cvtColor(top_part, cv2.COLOR_BGR2HSV)
+
+    # Define color ranges for the banner elements
+    # Orange logo
+    lower_orange = np.array([0, 50, 50])
+    upper_orange = np.array([30, 255, 255])
+    orange_mask = cv2.inRange(hsv_top, lower_orange, upper_orange)
+
+    # White/light colors for text and stripes
+    lower_white = np.array([0, 0, 180])
+    upper_white = np.array([180, 30, 255])
+    white_mask = cv2.inRange(hsv_top, lower_white, upper_white)
+
+    # Combine masks
+    combined_mask = cv2.bitwise_or(orange_mask, white_mask)
+
+    # Apply morphological operations to clean up the mask
+    kernel = np.ones((3, 3), np.uint8)  # Reduced kernel size
+    combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
+    combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
+
+    # Create a gradient mask for the banner area
+    gradient_mask = np.zeros_like(combined_mask)
+    banner_height = 60  # Height of the banner area
+    gradient_mask[0:banner_height, :] = 255
+
+    # Combine with the gradient mask to focus on banner area
+    combined_mask = cv2.bitwise_and(combined_mask, gradient_mask)
+
+    # Apply the mask only to detected regions in the banner area
+    top_part[combined_mask == 255] = [255, 255, 255]
+
+    # Smooth the transitions
+    mask_edges = cv2.Canny(combined_mask, 100, 200)
+    top_part = cv2.inpaint(top_part, mask_edges, 2, cv2.INPAINT_TELEA)
+
+    # Put the processed top part back into the original image
+    image[0:y_limit, :] = top_part
+
+    return image
+
+
 def resize_image(img, max_size=(240, 180)):
     h, w = img.shape[:2]
     target_w, target_h = max_size
@@ -69,6 +117,8 @@ def process_images():
     for image_path in tqdm(image_paths, desc="Processing images"):
         try:
             unpadded_image = unpad_image(image_path)
+            if os.path.basename(image_path).startswith("otokoc_"):
+                unpadded_image = remove_otokoc_stamp(unpadded_image)
             resized_image = resize_image(unpadded_image)
 
             output_path = f"data/processed_images/{os.path.basename(image_path)}"
