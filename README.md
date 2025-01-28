@@ -16,3 +16,6 @@ This script allows to postprocess the data and prepare it for the model training
 ```bash
 python src/postprocessing.py
 ```
+
+## Disclaimer
+Please refer to the [DISCLAIMER.md](DISCLAIMER.md) file for important information regarding the use of this code.
