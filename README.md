@@ -7,6 +7,7 @@ and use them to create a dataset to train both text and image classifier models.
 1. arabam.com (`python src/scrape_arabam.py`)
 2. sahibinden.com (`python src/scrape_sarisite.py`)
 3. dod.com.tr (`python src/scrape_dod.py`)
+4. otokocikinciel.com (`python src/scrape_otokoc.py`)
 
 ## Data Processing
 After the scraping process, there are some mismatches and misnamings.
