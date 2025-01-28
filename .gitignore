@@ -198,5 +198,6 @@ chromedriver.exe
 # Cursor
 .cursorrules
 
-# Log folder
+# Log folders
 logs/
+error_screenshots/
