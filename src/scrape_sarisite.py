@@ -324,6 +324,7 @@ def parallel_scraper(num_workers=3, max_pages=None):
 
     work_queue = queue.Queue()
     result_queue = queue.Queue()
+    processed_offsets = set()  # Move this to function scope
 
     workers = []
     for i in range(num_workers):
@@ -368,12 +369,14 @@ def parallel_scraper(num_workers=3, max_pages=None):
         pages_processed = 0
         failed_pages = 0
 
-        # First, queue all pages up to MAX_OFFSET
+        # Queue all pages up to and including MAX_OFFSET
         while current_offset <= MAX_OFFSET:
             work_queue.put(current_offset)
-            current_offset += paging_size
-            pages_processed += 1
             logger.info(f"Queued offset {current_offset}")
+            pages_processed += 1
+            if current_offset == MAX_OFFSET:
+                break
+            current_offset += paging_size
 
         while active:
             try:
@@ -390,18 +393,31 @@ def parallel_scraper(num_workers=3, max_pages=None):
                     failed_pages = 0  # Reset failed pages counter on success
                     filename = save_data(data, images, offset)
                     logger.info(f"Saved data from offset {offset} to {filename}")
+                    processed_offsets.add(offset)  # Add to processed offsets
                 result_queue.task_done()
 
-                # Check if we've processed all pages
+                # Only break if we've processed everything up to MAX_OFFSET
                 if work_queue.empty() and result_queue.empty():
-                    logger.info(f"All offsets up to {MAX_OFFSET} have been processed")
-                    break
+                    max_processed = max(processed_offsets) if processed_offsets else 0
+                    if max_processed >= MAX_OFFSET:
+                        logger.info(
+                            f"All offsets up to {MAX_OFFSET} have been processed. Highest processed offset: {max_processed}"
+                        )
+                        break
+                    else:
+                        logger.info(
+                            f"Still waiting for offsets above {max_processed} to be processed"
+                        )
             except queue.Empty:
                 if work_queue.empty():
-                    # Give a short grace period for results to come in
-                    time.sleep(1)
+                    # Give a longer grace period for results to come in
+                    time.sleep(2)
                     if result_queue.empty():
-                        break
+                        # Double check we've processed all offsets
+                        if not any(
+                            worker.driver.current_url for worker in workers
+                        ):  # All workers are idle
+                            break
                 time.sleep(0.1)
 
         logger.info(f"Scraping completed. Processed {pages_processed} pages")
