@@ -157,9 +157,11 @@ def scrape_page(driver, offset):
                 if not cols:
                     continue
 
-                row_data = [col.text.replace("\n", " ") for col in cols if col.text]
+                all_cols = [col.text.replace("\n", " ") for col in cols if col.text]
 
-                if len(row_data) == 9:
+                if len(all_cols) == 9:
+                    row_data = all_cols[:7] + all_cols[8:9] + [""]
+
                     first_col = cols[0]
                     img_element = first_col.find_element(
                         By.CSS_SELECTOR, "td > a > img, td > img"
