@@ -201,3 +201,6 @@ chromedriver.exe
 # Log folders
 logs/
 error_screenshots/
+
+# Jupyter
+*.ipynb
