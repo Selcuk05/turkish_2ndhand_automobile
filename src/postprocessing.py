@@ -206,9 +206,15 @@ def clean_numeric_data(df):
     return df
 
 
+def remove_broken_otokoc_data(df):
+    df = df[df.notna().all(axis=1)]
+    return df
+
+
 def process_csv(csv_path="data/turkish_2ndhand_automobile.csv", failed_images=None):
     df = pd.read_csv(csv_path)
 
+    df = remove_broken_otokoc_data(df)
     df = remove_duplicates(df)
     df = eliminate_low_samples(df)
     df = eliminate_placeholder_links(df, failed_images)
