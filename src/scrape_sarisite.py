@@ -95,9 +95,6 @@ def setup_driver():
 
     driver = uc.Chrome(options=options)
     driver.set_window_size(1920, 1080)
-
-    driver.get(base_url)
-
     return driver
 
 

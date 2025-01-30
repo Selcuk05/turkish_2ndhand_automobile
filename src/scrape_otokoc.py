@@ -122,12 +122,10 @@ def download_image(session, task):
         response = session.get(img_url, timeout=10)
         response.raise_for_status()
 
-        # Add otokoc_ prefix to the filename
         directory = os.path.dirname(img_filename)
         filename = os.path.basename(img_filename)
-        new_filename = os.path.join(directory, f"otokoc_{filename}")
+        new_filename = directory + f"/otokoc_{filename}"
 
-        # Save the image directly without cropping
         with open(new_filename, "wb") as f:
             f.write(response.content)
         return new_filename
@@ -501,14 +499,12 @@ def parallel_scraper(num_workers=3, max_pages=50):
                     w.cleanup()
                 raise
 
-        # Get max pages from the first worker
         try:
             max_pages_site = workers[0]._get_max_pages()
-            max_pages = min(max_pages, max_pages_site)  # Use the smaller of the two
+            max_pages = max(max_pages, max_pages_site)
             logger.info(f"Maximum pages to scrape: {max_pages}")
         except Exception as e:
             logger.error(f"Error getting max pages: {str(e)}")
-            # Continue with the default max_pages
 
         current_page = 1
         pages_in_queue = set()  # Track pages that are queued
@@ -538,7 +534,7 @@ def parallel_scraper(num_workers=3, max_pages=50):
             try:
                 while True:
                     page, data, images = result_queue.get_nowait()
-                    if data:  # Only save if we have data
+                    if data:
                         save_data(data, images, page)
                     pages_in_queue.remove(page)
                     completed_pages.add(page)
