@@ -202,12 +202,23 @@ def clean_numeric_data(df):
     df["fiyat"] = df["fiyat"].apply(
         lambda x: x.replace("TL", "").replace("₺", "").replace(".", "").strip()
     )
+    df["yil"] = df["yil"].astype(int)
 
     return df
 
 
 def remove_broken_otokoc_data(df):
     df = df[df.notna().all(axis=1)]
+    return df
+
+
+def format_text_fields(df):
+    df = df.copy()
+    text_columns = ["marka", "model", "seri"]
+
+    for col in text_columns:
+        df[col] = df[col].str.title()
+
     return df
 
 
@@ -222,6 +233,7 @@ def process_csv(csv_path="data/turkish_2ndhand_automobile.csv", failed_images=No
     df = rename_wrong_brands(df)
     df = process_image_paths(df)
     df = clean_numeric_data(df)
+    df = format_text_fields(df)
 
     df.to_csv("data/turkish_2ndhand_automobile_processed.csv", index=False)
     print("Final data shape:", df.shape)
