@@ -124,7 +124,9 @@ def download_image(session, task):
 
         directory = os.path.dirname(img_filename)
         filename = os.path.basename(img_filename)
-        new_filename = directory + f"/otokoc_{filename}"
+        new_filename = "/".join([directory, f"otokoc_{filename}"])
+
+        os.makedirs(os.path.dirname(new_filename), exist_ok=True)
 
         with open(new_filename, "wb") as f:
             f.write(response.content)
@@ -136,7 +138,7 @@ def download_image(session, task):
 
 def save_data(data, images, page):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_filename = f"data/turkish_2ndhand_automobile.csv"
+    csv_filename = "data/turkish_2ndhand_automobile.csv"
 
     if not os.path.exists("data"):
         os.makedirs("data")
@@ -156,12 +158,13 @@ def save_data(data, images, page):
     ]
     df = pd.DataFrame(data, columns=columns)
 
-    # Prepare image download tasks
     session = create_session()
     img_tasks = []
     for idx, img_url in enumerate(images):
         if img_url:
-            img_filename = f"data/images/car_{timestamp}_page_{page}_idx_{idx}.jpg"
+            img_filename = "/".join(
+                ["data", "images", f"car_{timestamp}_page_{page}_idx_{idx}.jpg"]
+            )
             img_tasks.append((img_url, img_filename))
 
     # Download images in parallel
@@ -170,9 +173,11 @@ def save_data(data, images, page):
             executor.map(lambda x: download_image(session, x), img_tasks)
         )
 
-    # Update DataFrame with image paths
+    # Update DataFrame with forward slash paths
     for idx, path in enumerate(image_paths):
-        df.loc[idx, "image_path"] = path
+        if path:
+            # Convert any backslashes to forward slashes
+            df.loc[idx, "image_path"] = path.replace("\\", "/")
 
     # Save to CSV
     if os.path.exists(csv_filename):
@@ -212,48 +217,59 @@ class ScraperWorker:
             self.driver.get(f"{base_url}?page=1")
             wait = WebDriverWait(self.driver, 10)
 
-            # First try to find all pagination buttons
-            pagination_buttons = wait.until(
-                EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, "nav ul li button")
-                )
-            )
-
-            # Find the last numeric button (excluding next/prev buttons)
-            max_pages = 1  # Default to 1 if we can't find pagination
-            for button in pagination_buttons:
-                try:
-                    page_num = int(button.text.strip())
-                    if page_num > max_pages:
-                        max_pages = page_num
-                except (ValueError, TypeError):
-                    continue
-
-            if max_pages == 1:
-                # If we couldn't find pagination, try to count the number of listings
-                # and divide by items per page (15)
-                listings = wait.until(
-                    EC.presence_of_all_elements_located(
-                        (By.CSS_SELECTOR, "li .style_product__BIm5o")
-                    )
-                )
-                total_items_text = wait.until(
+            # Try multiple approaches to get max pages
+            try:
+                # First try the specified XPath
+                max_page_element = wait.until(
                     EC.presence_of_element_located(
-                        (By.CSS_SELECTOR, ".style_totalCount__Tn2eE")
+                        (
+                            By.XPATH,
+                            '//*[@id="__next"]/div[2]/div/main/div/section/div/div[2]/div[3]/nav/ul/li[6]/button',
+                        )
                     )
-                ).text
+                )
+                max_pages = int(max_page_element.text.strip())
+            except (ValueError, Exception) as e:
+                logger.warning(f"Could not get max pages from primary XPath: {str(e)}")
 
-                try:
-                    total_items = int("".join(filter(str.isdigit, total_items_text)))
-                    max_pages = (total_items + 14) // 15  # Ceiling division by 15
-                except (ValueError, TypeError):
-                    max_pages = 50  # Fallback to default if we can't parse the number
+                # Fallback: Try to find all pagination buttons
+                pagination_buttons = wait.until(
+                    EC.presence_of_all_elements_located(
+                        (By.CSS_SELECTOR, "nav ul li button")
+                    )
+                )
+
+                # Find the last numeric button (excluding next/prev buttons)
+                max_pages = 1
+                for button in pagination_buttons:
+                    try:
+                        page_num = int(button.text.strip())
+                        if page_num > max_pages:
+                            max_pages = page_num
+                    except (ValueError, TypeError):
+                        continue
+
+                if max_pages == 1:
+                    # If still no valid max pages, try to get from total count
+                    total_count_element = wait.until(
+                        EC.presence_of_element_located(
+                            (By.CSS_SELECTOR, "[class*='totalCount']")
+                        )
+                    )
+                    total_text = total_count_element.text
+                    try:
+                        total_items = int("".join(filter(str.isdigit, total_text)))
+                        max_pages = (total_items + 14) // 15  # Ceiling division by 15
+                    except (ValueError, TypeError):
+                        logger.warning("Could not parse total count, using default")
+                        max_pages = 50
 
             logger.info(f"Found {max_pages} pages to scrape")
             return max_pages
 
         except Exception as e:
             logger.error(f"Error getting max pages: {str(e)}")
+            take_error_screenshot(self.driver, "max_pages_error")
             return 50  # Default to 50 pages if we can't get the max
 
     def _parse_car_info(self, title):
@@ -499,12 +515,14 @@ def parallel_scraper(num_workers=3, max_pages=50):
                     w.cleanup()
                 raise
 
+        # Get max pages from the first worker
         try:
             max_pages_site = workers[0]._get_max_pages()
-            max_pages = max(max_pages, max_pages_site)
+            max_pages = max(max_pages, max_pages_site)  # Use the smaller of the two
             logger.info(f"Maximum pages to scrape: {max_pages}")
         except Exception as e:
             logger.error(f"Error getting max pages: {str(e)}")
+            # Continue with the default max_pages
 
         current_page = 1
         pages_in_queue = set()  # Track pages that are queued
@@ -534,7 +552,7 @@ def parallel_scraper(num_workers=3, max_pages=50):
             try:
                 while True:
                     page, data, images = result_queue.get_nowait()
-                    if data:
+                    if data:  # Only save if we have data
                         save_data(data, images, page)
                     pages_in_queue.remove(page)
                     completed_pages.add(page)
