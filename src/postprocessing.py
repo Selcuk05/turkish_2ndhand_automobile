@@ -44,48 +44,35 @@ def unpad_image(image_path):
 
 
 def remove_otokoc_stamp(image):
-    # Define the region to process (only the top banner part)
-    y_limit = 80  # Reduced from 135 to focus only on the banner
+    y_limit = 80
     top_part = image[0:y_limit, :].copy()
 
-    # Convert to HSV for better color segmentation
     hsv_top = cv2.cvtColor(top_part, cv2.COLOR_BGR2HSV)
 
-    # Define color ranges for the banner elements
-    # Orange logo
     lower_orange = np.array([0, 50, 50])
     upper_orange = np.array([30, 255, 255])
     orange_mask = cv2.inRange(hsv_top, lower_orange, upper_orange)
 
-    # White/light colors for text and stripes
     lower_white = np.array([0, 0, 180])
     upper_white = np.array([180, 30, 255])
     white_mask = cv2.inRange(hsv_top, lower_white, upper_white)
 
-    # Combine masks
     combined_mask = cv2.bitwise_or(orange_mask, white_mask)
 
-    # Apply morphological operations to clean up the mask
-    kernel = np.ones((3, 3), np.uint8)  # Reduced kernel size
+    kernel = np.ones((3, 3), np.uint8)
     combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
     combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
 
-    # Create a gradient mask for the banner area
     gradient_mask = np.zeros_like(combined_mask)
-    banner_height = 60  # Height of the banner area
+    banner_height = 60
     gradient_mask[0:banner_height, :] = 255
 
-    # Combine with the gradient mask to focus on banner area
     combined_mask = cv2.bitwise_and(combined_mask, gradient_mask)
-
-    # Apply the mask only to detected regions in the banner area
     top_part[combined_mask == 255] = [255, 255, 255]
 
-    # Smooth the transitions
     mask_edges = cv2.Canny(combined_mask, 100, 200)
     top_part = cv2.inpaint(top_part, mask_edges, 2, cv2.INPAINT_TELEA)
 
-    # Put the processed top part back into the original image
     image[0:y_limit, :] = top_part
 
     return image
@@ -209,6 +196,16 @@ def eliminate_placeholder_links(df, failed_images=None):
     return df
 
 
+def clean_numeric_data(df):
+    df = df.copy()
+    df["km"] = df["km"].apply(lambda x: x.replace("km", "").replace(".", "").strip())
+    df["fiyat"] = df["fiyat"].apply(
+        lambda x: x.replace("TL", "").replace("₺", "").replace(".", "").strip()
+    )
+
+    return df
+
+
 def process_csv(csv_path="data/turkish_2ndhand_automobile.csv", failed_images=None):
     df = pd.read_csv(csv_path)
 
@@ -218,6 +215,7 @@ def process_csv(csv_path="data/turkish_2ndhand_automobile.csv", failed_images=No
     df = replace_wrong_series(df)
     df = rename_wrong_brands(df)
     df = process_image_paths(df)
+    df = clean_numeric_data(df)
 
     df.to_csv("data/turkish_2ndhand_automobile_processed.csv", index=False)
     print("Final data shape:", df.shape)
