@@ -163,6 +163,8 @@ def process_image_paths(df):
         lambda x: f"data/processed_images/{os.path.basename(x)}"
     )
 
+    df = df[df["image_path"].apply(os.path.exists)]
+
     return df
 
 
