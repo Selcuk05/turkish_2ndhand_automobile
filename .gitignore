@@ -204,3 +204,10 @@ error_screenshots/
 
 # Jupyter
 *.ipynb
+
+# Models
+*.pth
+*.pt
+*.pkl
+*.joblib
+*.joblib
