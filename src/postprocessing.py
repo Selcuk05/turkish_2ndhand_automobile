@@ -200,7 +200,9 @@ def eliminate_placeholder_links(df, failed_images=None):
 
 def clean_numeric_data(df):
     df = df.copy()
-    df["km"] = df["km"].apply(lambda x: x.replace("km", "").replace(".", "").strip())
+    df["km"] = df["km"].apply(
+        lambda x: x.replace("km", "").replace(".", "").replace("-", "0").strip()
+    )
     df["fiyat"] = df["fiyat"].apply(
         lambda x: x.replace("TL", "").replace("₺", "").replace(".", "").strip()
     )
