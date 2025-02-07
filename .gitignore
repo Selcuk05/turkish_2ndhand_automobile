@@ -183,9 +183,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Data directory
+# Data
 data/
 data_*/
+*.jpg
 
 # Chrome driver
 chromedriver
