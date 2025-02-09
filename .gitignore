@@ -186,7 +186,7 @@ __pycache__/
 # Data
 data/
 data_*/
-*.jpg
+testdata/
 
 # Chrome driver
 chromedriver
