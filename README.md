@@ -1,6 +1,6 @@
-# Turkish 2nd Hand Automobile Data Scrapers
+# Turkish Second Hand Automobile Data Scraping and Classification
 
-This is a project aiming to scrape data from prominent Turkish 2nd hand automobile sale websites.
+This is a project aiming to scrape from prominent Turkish second hand automobile sale websites to utilize the data for training a image classifier and a pricing predictor.
 
 ## Scrapers
 1. arabam.com (`python src/scrape_arabam.py`)
