@@ -4,78 +4,76 @@ import glob
 import os
 import pandas as pd
 from tqdm import tqdm
+from ultralytics import YOLO
+import torch
+import logging
+
+vehicle_segmenter = None
 
 
-def is_placeholder_image(img):
-    if img is None:
-        return True
+def init_yolo():
+    global vehicle_segmenter
+    if vehicle_segmenter is None:
+        logging.getLogger("ultralytics").setLevel(logging.WARNING)
 
-    if len(img.shape) == 3:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = img
-
-    white_pixels = np.sum(gray > 240)
-    total_pixels = gray.size
-    white_percentage = white_pixels / total_pixels
-
-    return white_percentage > 0.95
+        vehicle_segmenter = YOLO("yolov8x-seg.pt", verbose=False)
+        vehicle_segmenter.to("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def unpad_image(image_path):
-    img = cv2.imread(image_path)
-    if img is None:
-        raise ValueError(f"Could not read image: {image_path}")
+def remove_background(image):
+    global vehicle_segmenter
+    if vehicle_segmenter is None:
+        init_yolo()
 
-    if is_placeholder_image(img):
-        raise ValueError(f"Detected placeholder image: {image_path}")
+    if image is None or image.size == 0:
+        raise ValueError("Invalid input image")
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = 255 * (gray < 128).astype(np.uint8)
+    results = vehicle_segmenter(image, classes=[2, 3, 5, 7], verbose=False)
 
-    coords = cv2.findNonZero(gray)
-    if coords is None:
-        raise ValueError(f"No non-zero pixels found in image: {image_path}")
+    if len(results) == 0:
+        tqdm.write("No detection results")
+        return image
 
-    x, y, w, h = cv2.boundingRect(coords)
-    rect = img[y : y + h, x : x + w]
+    if not results[0].masks:
+        tqdm.write("No vehicle detected in image")
+        return image
 
-    return rect
+    combined_mask = None
+    try:
+        for mask in results[0].masks:
+            mask_np = mask.data.cpu().numpy()
+            if mask_np.size == 0:
+                continue
 
+            if combined_mask is None:
+                combined_mask = mask_np
+            else:
+                combined_mask = np.logical_or(combined_mask, mask_np)
 
-def remove_otokoc_stamp(image):
-    y_limit = 80
-    top_part = image[0:y_limit, :].copy()
+        if combined_mask is None or combined_mask.size == 0:
+            tqdm.write("No valid mask generated")
+            return image
 
-    hsv_top = cv2.cvtColor(top_part, cv2.COLOR_BGR2HSV)
+        if len(combined_mask.shape) > 2:
+            combined_mask = combined_mask.squeeze()
 
-    lower_orange = np.array([0, 50, 50])
-    upper_orange = np.array([30, 255, 255])
-    orange_mask = cv2.inRange(hsv_top, lower_orange, upper_orange)
+        if combined_mask.shape[0] == 0 or combined_mask.shape[1] == 0:
+            tqdm.write("Invalid mask dimensions")
+            return image
 
-    lower_white = np.array([0, 0, 180])
-    upper_white = np.array([180, 30, 255])
-    white_mask = cv2.inRange(hsv_top, lower_white, upper_white)
+        combined_mask = cv2.resize(
+            combined_mask.astype(float), (image.shape[1], image.shape[0])
+        )
+        combined_mask = cv2.GaussianBlur(combined_mask, (5, 5), 0)
+        mask_3channel = np.stack([combined_mask] * 3, axis=-1)
+        white_bg = np.ones_like(image) * 255
+        result = image * mask_3channel + white_bg * (1 - mask_3channel)
 
-    combined_mask = cv2.bitwise_or(orange_mask, white_mask)
+        return result.astype(np.uint8)
 
-    kernel = np.ones((3, 3), np.uint8)
-    combined_mask = cv2.dilate(combined_mask, kernel, iterations=1)
-    combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
-
-    gradient_mask = np.zeros_like(combined_mask)
-    banner_height = 60
-    gradient_mask[0:banner_height, :] = 255
-
-    combined_mask = cv2.bitwise_and(combined_mask, gradient_mask)
-    top_part[combined_mask == 255] = [255, 255, 255]
-
-    mask_edges = cv2.Canny(combined_mask, 100, 200)
-    top_part = cv2.inpaint(top_part, mask_edges, 2, cv2.INPAINT_TELEA)
-
-    image[0:y_limit, :] = top_part
-
-    return image
+    except Exception as e:
+        tqdm.write(f"Error in mask processing: {str(e)}")
+        return image
 
 
 def resize_image(img, max_size=(240, 180)):
@@ -100,17 +98,26 @@ def process_images():
     os.makedirs("data/processed_images", exist_ok=True)
     failed_images = set()
 
+    init_yolo()
+
     image_paths = glob.glob("data/images/*.jpg")
     for image_path in tqdm(image_paths, desc="Processing images"):
         try:
-            unpadded_image = unpad_image(image_path)
-            if os.path.basename(image_path).startswith("otokoc_"):
-                unpadded_image = remove_otokoc_stamp(unpadded_image)
-            resized_image = resize_image(unpadded_image)
+            image = cv2.imread(image_path)
+            if image is None:
+                raise ValueError(f"Could not read image: {image_path}")
+
+            processed_image = remove_background(image)
+
+            if np.array_equal(processed_image, image):
+                raise ValueError(f"No vehicle detected in image")
+
+            resized_image = resize_image(processed_image)
 
             output_path = f"data/processed_images/{os.path.basename(image_path)}"
             cv2.imwrite(output_path, resized_image)
-        except Exception:
+        except Exception as e:
+            tqdm.write(f"\nFailed to process {image_path}: {str(e)}")
             failed_images.add(os.path.basename(image_path))
 
             output_path = f"data/processed_images/{os.path.basename(image_path)}"

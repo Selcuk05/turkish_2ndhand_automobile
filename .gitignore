@@ -212,3 +212,6 @@ error_screenshots/
 *.pkl
 *.joblib
 *.joblib
+
+# Weights and Biases
+wandb/
