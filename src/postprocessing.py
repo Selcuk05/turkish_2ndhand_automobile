@@ -32,40 +32,46 @@ def remove_background(image):
 
     if len(results) == 0:
         tqdm.write("No detection results")
-        return image
+        return None
 
     if not results[0].masks:
         tqdm.write("No vehicle detected in image")
-        return image
+        return None
 
-    combined_mask = None
     try:
-        for mask in results[0].masks:
+        # Find the mask with the largest area (most prevalent vehicle)
+        masks = results[0].masks
+        largest_mask = None
+        largest_area = 0
+
+        for mask in masks:
             mask_np = mask.data.cpu().numpy()
             if mask_np.size == 0:
                 continue
 
-            if combined_mask is None:
-                combined_mask = mask_np
-            else:
-                combined_mask = np.logical_or(combined_mask, mask_np)
+            # Calculate area of the mask
+            area = np.sum(mask_np)
+            if area > largest_area:
+                largest_area = area
+                largest_mask = mask_np
 
-        if combined_mask is None or combined_mask.size == 0:
+        if largest_mask is None or largest_mask.size == 0:
             tqdm.write("No valid mask generated")
-            return image
+            return None
 
-        if len(combined_mask.shape) > 2:
-            combined_mask = combined_mask.squeeze()
+        if len(largest_mask.shape) > 2:
+            largest_mask = largest_mask.squeeze()
 
-        if combined_mask.shape[0] == 0 or combined_mask.shape[1] == 0:
+        if largest_mask.shape[0] == 0 or largest_mask.shape[1] == 0:
             tqdm.write("Invalid mask dimensions")
-            return image
+            return None
 
-        combined_mask = cv2.resize(
-            combined_mask.astype(float), (image.shape[1], image.shape[0])
+        # Resize mask to match image dimensions
+        largest_mask = cv2.resize(
+            largest_mask.astype(float), (image.shape[1], image.shape[0])
         )
-        combined_mask = cv2.GaussianBlur(combined_mask, (5, 5), 0)
-        mask_3channel = np.stack([combined_mask] * 3, axis=-1)
+        largest_mask = cv2.GaussianBlur(largest_mask, (5, 5), 0)
+        mask_3channel = np.stack([largest_mask] * 3, axis=-1)
         white_bg = np.ones_like(image) * 255
         result = image * mask_3channel + white_bg * (1 - mask_3channel)
 
@@ -73,7 +79,7 @@ def remove_background(image):
 
     except Exception as e:
         tqdm.write(f"Error in mask processing: {str(e)}")
-        return image
+        return None
 
 
 def resize_image(img, max_size=(240, 180)):
@@ -109,7 +115,8 @@ def process_images():
 
             processed_image = remove_background(image)
 
-            if np.array_equal(processed_image, image):
+            # If no vehicle detected, add to failed images and skip processing
+            if processed_image is None:
                 raise ValueError(f"No vehicle detected in image")
 
             resized_image = resize_image(processed_image)
